@@ -18,23 +18,21 @@ public class KeyboardMixin {
     @Shadow
     private boolean switchF3State;
 
-    // This is a really weird way of adding the second menu, but I don't feel like losing sanity over the other ways to mixin.
     @Inject(method = "onKey(JIIII)V", at = @At("TAIL"))
     private void onKey(long window, int key, int scancode, int action, int modifiers, CallbackInfo ci) {
         if (SimpleF3Config.IsDisabled())
             return;
 
-        if (this.client.currentScreen == null || this.client.currentScreen.passEvents) {
+        // passEvents was removed in 1.21.x; just check for null screen
+        if (this.client.currentScreen == null) {
             if (action == 0 && key == 292 && !this.switchF3State) {
-                if (!this.client.options.debugEnabled && !SimpleF3.simpleDebugEnabled) {
+                // debugEnabled/debugProfilerEnabled/debugTpsEnabled were removed from GameOptions in 1.21.x.
+                // Use getDebugHud().shouldShowDebugHud() to check vanilla debug HUD state.
+                boolean vanillaDebugVisible = this.client.getDebugHud().shouldShowDebugHud();
+                if (!vanillaDebugVisible && !SimpleF3.simpleDebugEnabled) {
                     SimpleF3.simpleDebugEnabled = true;
-                }
-                else if (this.client.options.debugEnabled && SimpleF3.simpleDebugEnabled) {
+                } else if (vanillaDebugVisible && SimpleF3.simpleDebugEnabled) {
                     SimpleF3.simpleDebugEnabled = false;
-
-                    this.client.options.debugEnabled = false;
-                    this.client.options.debugProfilerEnabled = false;
-                    this.client.options.debugTpsEnabled = false;
                 }
             }
         }

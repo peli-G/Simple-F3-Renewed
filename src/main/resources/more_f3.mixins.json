@@ -2,15 +2,10 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.notcasey.simple_f3.mixin",
-  "compatibilityLevel": "JAVA_17",
-  "mixins": [
-  ],
-  "client": [
-    "TitleScreenMixin",
-    "InGameHudMixin",
-    "KeyboardMixin"
-  ],
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "client": [],
   "injectors": {
-    "defaultRequire": 1
+    "defaultRequire": 0
   }
 }

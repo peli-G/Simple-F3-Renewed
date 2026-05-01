@@ -4,13 +4,12 @@ import com.google.common.base.Strings;
 import com.notcasey.simple_f3.config.SimpleF3Config;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawableHelper;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.biome.Biome;
 
 import java.awt.*;
@@ -20,8 +19,9 @@ import java.util.Locale;
 import java.util.Objects;
 
 @Environment(EnvType.CLIENT)
-public class SimpleDebugHud extends DrawableHelper {
-    private static final int TEXT_COLOR = 14737632;
+public class SimpleDebugHud {
+    // 0xFF000000 alpha must be set — in 1.21.x drawText respects alpha, 0x00E0E0E0 renders invisible
+    private static final int TEXT_COLOR = 0xFFE0E0E0;
     private final MinecraftClient client;
     private final TextRenderer textRenderer;
 
@@ -30,7 +30,7 @@ public class SimpleDebugHud extends DrawableHelper {
         this.textRenderer = client.textRenderer;
     }
 
-    public void render(MatrixStack matrices) {
+    public void render(DrawContext context) {
         if (SimpleF3Config.IsDisabled()) {
             SimpleF3.simpleDebugEnabled = false;
             return;
@@ -38,9 +38,10 @@ public class SimpleDebugHud extends DrawableHelper {
 
         BlockPos blockPos = this.client.getCameraEntity().getBlockPos();
 
-        List<String> list = new ArrayList<String>();
+        List<String> list = new ArrayList<>();
         if (SimpleF3Config.show_game_version)
-            list.add("Minecraft ".concat(SharedConstants.getGameVersion().getName()));
+            // MinecraftClient#getGameVersion() returns the version string directly (e.g. "1.21.11")
+            list.add("Minecraft ".concat(this.client.getGameVersion()));
         if (SimpleF3Config.show_fps)
             list.add(Integer.toString(this.client.getCurrentFps()).concat(" fps"));
 
@@ -48,43 +49,48 @@ public class SimpleDebugHud extends DrawableHelper {
             list.add("");
 
         if (SimpleF3Config.show_coords)
-            list.add(String.format(Locale.ROOT, "XYZ: %.3f / %.5f / %.3f", this.client.getCameraEntity().getX(), this.client.getCameraEntity().getY(), this.client.getCameraEntity().getZ()));
-        if (SimpleF3Config.show_biome && blockPos.getY() >= this.client.world.getBottomY() && blockPos.getY() < this.client.world.getTopY()) {
-            RegistryEntry biome = this.client.world.getBiome(blockPos);
+            list.add(String.format(Locale.ROOT, "XYZ: %.3f / %.5f / %.3f",
+                    this.client.getCameraEntity().getX(),
+                    this.client.getCameraEntity().getY(),
+                    this.client.getCameraEntity().getZ()));
+
+        // getTopY now requires (Heightmap.Type, int x, int z) — use world height bounds for range check
+        if (SimpleF3Config.show_biome
+                && blockPos.getY() >= this.client.world.getBottomY()
+                && blockPos.getY() < this.client.world.getTopY(Heightmap.Type.WORLD_SURFACE, blockPos.getX(), blockPos.getZ())) {
+            RegistryEntry<Biome> biome = this.client.world.getBiome(blockPos);
             list.add("Biome: " + getBiomeString(biome));
         }
 
-        for(int i = 0; i < list.size(); ++i) {
-            String string = (String)list.get(i);
+        for (int i = 0; i < list.size(); ++i) {
+            String string = list.get(i);
             if (!Strings.isNullOrEmpty(string)) {
-                Objects.requireNonNull(this.textRenderer);
-                int j = 9;
-                int k = this.textRenderer.getWidth(string);
-                int l = 2;
-                int m = 2 + j * i;
+                int lineHeight = 9;
+                int textWidth = this.textRenderer.getWidth(string);
+                int x = 2;
+                int y = 2 + lineHeight * i;
 
                 if (SimpleF3Config.right_text)
-                    l = this.client.getWindow().getScaledWidth() - 2 - k;
+                    x = this.client.getWindow().getScaledWidth() - 2 - textWidth;
 
-                int textColor = 14737632;
+                int textColor = TEXT_COLOR;
                 if (SimpleF3Config.rainbow_text)
-                    textColor = Color.HSBtoRGB((float) SimpleF3.rainbowHue/255f, 1f, 1f);
+                    textColor = Color.HSBtoRGB((float) SimpleF3.rainbowHue / 255f, 1f, 1f);
 
-                if (SimpleF3Config.classic_style)
-                    this.textRenderer.drawWithShadow(matrices, string, (float)l, (float)m, textColor);
-                else {
-                    fill(matrices, l - 1, m - 1, l + k + 1, m + j - 1, -1873784752);
-                    this.textRenderer.draw(matrices, string, (float) l, (float) m, textColor);
+                if (SimpleF3Config.classic_style) {
+                    context.drawTextWithShadow(this.textRenderer, string, x, y, textColor);
+                } else {
+                    context.fill(x - 1, y - 1, x + textWidth + 1, y + lineHeight - 1, -1873784752);
+                    context.drawText(this.textRenderer, string, x, y, textColor, false);
                 }
             }
         }
     }
 
     private static String getBiomeString(RegistryEntry<Biome> biome) {
-        return (String)biome.getKeyOrValue().map((biomeKey) -> {
-            return biomeKey.getValue().toString();
-        }, (biome_) -> {
-            return "[unregistered " + biome_ + "]";
-        });
+        return biome.getKeyOrValue().map(
+                (biomeKey) -> biomeKey.getValue().toString(),
+                (biome_) -> "[unregistered " + biome_ + "]"
+        );
     }
 }
